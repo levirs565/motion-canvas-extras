@@ -7,8 +7,10 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "@motion-canvas/2d": "^3.2.0",
     "@motion-canvas/core": "^3.2.0",
-    "@motion-canvas/2d": "^3.2.0"
+    "diff-sequences": "^29.4.3",
+    "mathjax-full": "^3.2.2"
   },
   "devDependencies": {
     "@motion-canvas/ui": "^3.2.1",

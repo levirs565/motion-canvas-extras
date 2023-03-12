@@ -5,7 +5,7 @@ import {
   Rect,
   ShapeProps,
 } from "@motion-canvas/2d/lib/components";
-import { signal } from "@motion-canvas/2d/lib/decorators";
+import { computed, signal } from "@motion-canvas/2d/lib/decorators";
 import { DesiredLength } from "@motion-canvas/2d/lib/partials";
 import { SignalValue, SimpleSignal } from "@motion-canvas/core/lib/signals";
 import {
@@ -51,22 +51,29 @@ export interface SVGProps extends LayoutProps {
 export class SVG extends Layout {
   @signal()
   public declare readonly svg: SimpleSignal<string, this>;
-  private parsedSVG: ParsedSVG;
 
   public constructor(props: SVGProps) {
     super(props);
-
-    this.parsedSVG = this.parseSVG(this.svg());
-    this.parsedSVG.nodes.forEach((child) => this.add(child));
+    this.spawner(this.parsedNodes);
   }
 
   protected override desiredSize(): SerializedVector2<DesiredLength> {
     const custom = super.desiredSize();
-    const { x, y } = this.parsedSVG.size;
+    const { x, y } = this.parsed().size;
     return {
       x: custom.x ?? x,
       y: custom.y ?? y,
     };
+  }
+
+  @computed()
+  private parsed() {
+    return this.parseSVG(this.svg());
+  }
+
+  @computed()
+  private parsedNodes() {
+    return this.parsed().nodes;
   }
 
   private parseSVG(svg: string): ParsedSVG {
@@ -116,6 +123,7 @@ export class SVG extends Layout {
         parseFloat(element.getAttribute("stroke-width")),
         inheritedStyle.lineWidth
       ),
+      layout: false,
     };
   }
 
@@ -282,7 +290,7 @@ export class SVG extends Layout {
 
   public *tweenSVG(svg: string, time: number) {
     const newSVG = this.parseSVG(svg);
-    const diff = this.diffSVG(this.parsedSVG, newSVG);
+    const diff = this.diffSVG(this.parsed(), newSVG);
     const transformed = diff.transformed.map(({ from, to }) => ({
       from: this.cloneNodeExact(from),
       current: from,
@@ -345,9 +353,7 @@ export class SVG extends Layout {
         for (const node of diff.inserted) node.opacity(insertedOpacity);
       },
       () => {
-        this.removeChildren();
-        newSVG.nodes.forEach((child) => this.add(child));
-        this.parsedSVG = newSVG;
+        this.spawner(this.parsedNodes);
         this.svg(svg);
         if (autoWidth) this.customWidth(null);
         if (autoHeight) this.customHeight(null);

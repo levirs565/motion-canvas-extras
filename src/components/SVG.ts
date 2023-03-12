@@ -2,7 +2,6 @@ import {
   Layout,
   LayoutProps,
   Node,
-  NodeProps,
   Rect,
   ShapeProps,
 } from "@motion-canvas/2d/lib/components";
@@ -10,22 +9,39 @@ import { signal } from "@motion-canvas/2d/lib/decorators";
 import { DesiredLength } from "@motion-canvas/2d/lib/partials";
 import { SignalValue, SimpleSignal } from "@motion-canvas/core/lib/signals";
 import {
+  clampRemap,
+  easeInOutSine,
+  tween,
+} from "@motion-canvas/core/lib/tweening";
+import {
   BBox,
   SerializedVector2,
   Vector2,
 } from "@motion-canvas/core/lib/types";
 import { useLogger } from "@motion-canvas/core/lib/utils";
+import diffSequence from "diff-sequences";
 import {
   decomposeMatrixTransformation,
+  easeInOutSineVector2,
   firstNotNull,
   getPathBBox,
 } from "../utils";
 import { Path } from "./Path";
 
 interface ParsedSVG {
-  width: number;
-  height: number;
+  size: Vector2;
   nodes: Array<Node>;
+}
+
+interface SVGDiff {
+  fromSize: Vector2;
+  toSize: Vector2;
+  inserted: Array<Node>;
+  deleted: Array<Node>;
+  transformed: Array<{
+    from: Node;
+    to: Node;
+  }>;
 }
 
 export interface SVGProps extends LayoutProps {
@@ -35,32 +51,42 @@ export interface SVGProps extends LayoutProps {
 export class SVG extends Layout {
   @signal()
   public declare readonly svg: SimpleSignal<string, this>;
-  private viewBox: BBox;
+  private parsedSVG: ParsedSVG;
 
   public constructor(props: SVGProps) {
     super(props);
 
-    const svg = this.svg();
+    this.parsedSVG = this.parseSVG(this.svg());
+    this.parsedSVG.nodes.forEach((child) => this.add(child));
+  }
+
+  protected override desiredSize(): SerializedVector2<DesiredLength> {
+    const custom = super.desiredSize();
+    const { x, y } = this.parsedSVG.size;
+    return {
+      x: custom.x ?? x,
+      y: custom.y ?? y,
+    };
+  }
+
+  private parseSVG(svg: string): ParsedSVG {
     const container = document.createElement("div");
     container.innerHTML = svg;
 
     const svgRoot = container.querySelector("svg");
     const { x, y, width, height } = svgRoot.viewBox.baseVal;
-    const bbox = new BBox(x, y, width, height);
-    const center = bbox.center;
+    const viewBox = new BBox(x, y, width, height);
+    const center = viewBox.center;
 
     const rootTransform = new DOMMatrix().translate(-center.x, -center.y);
 
-    const children = Array.from(
+    const nodes = Array.from(
       this.extractGroupShape(svgRoot, svgRoot, rootTransform, {})
     );
-    children.forEach((child) => this.add(child));
-
-    this.viewBox = bbox;
-  }
-
-  protected override desiredSize(): SerializedVector2<DesiredLength> {
-    return this.viewBox.size;
+    return {
+      size: viewBox.size,
+      nodes,
+    };
   }
 
   private getElementTransformation(
@@ -163,5 +189,169 @@ export class SVG extends Layout {
         ),
       });
     }
+  }
+
+  private isNodeEqual(aShape: Node, bShape: Node): boolean {
+    if (aShape.constructor !== bShape.constructor) return false;
+    if (
+      aShape instanceof Path &&
+      bShape instanceof Path &&
+      aShape.data() !== bShape.data()
+    )
+      return false;
+
+    return true;
+  }
+
+  private diffSVG(from: ParsedSVG, to: ParsedSVG): SVGDiff {
+    const diff: SVGDiff = {
+      fromSize: from.size,
+      toSize: to.size,
+      inserted: [],
+      deleted: [],
+      transformed: [],
+    };
+
+    const aNodes = from.nodes;
+    const bNodes = to.nodes;
+    const aLength = aNodes.length;
+    const bLength = bNodes.length;
+    let aIndex = 0;
+    let bIndex = 0;
+
+    diffSequence(
+      aLength,
+      bLength,
+      (aIndex, bIndex) => {
+        return this.isNodeEqual(aNodes[aIndex], bNodes[bIndex]);
+      },
+      (nCommon, aCommon, bCommon) => {
+        if (aIndex !== aCommon)
+          diff.deleted.push(...aNodes.slice(aIndex, aCommon));
+        if (bIndex !== bCommon)
+          diff.inserted.push(...bNodes.slice(bIndex, bCommon));
+
+        aIndex = aCommon;
+        bIndex = bCommon;
+        for (let x = 0; x < nCommon; x++) {
+          diff.transformed.push({
+            from: aNodes[aIndex],
+            to: bNodes[bIndex],
+          });
+          aIndex++;
+          bIndex++;
+        }
+      }
+    );
+
+    if (aIndex !== aLength) diff.deleted.push(...aNodes.slice(aIndex));
+
+    if (bIndex !== bNodes.length) diff.inserted.push(...bNodes.slice(bIndex));
+
+    diff.deleted = diff.deleted.filter((aNode) => {
+      const bIndex = diff.inserted.findIndex((bNode) =>
+        this.isNodeEqual(aNode, bNode)
+      );
+      if (bIndex >= 0) {
+        const bNode = diff.inserted[bIndex];
+        diff.inserted.splice(bIndex, 1);
+        diff.transformed.push({
+          from: aNode,
+          to: bNode,
+        });
+
+        return false;
+      }
+
+      return true;
+    });
+    return diff;
+  }
+
+  private cloneNodeExact(node: Node) {
+    const props: ShapeProps = {
+      position: node.position(),
+      scale: node.scale(),
+      rotation: node.rotation(),
+    };
+    if (node instanceof Layout) {
+      props.size = node.size();
+    }
+    return node.clone(props);
+  }
+
+  public *tweenSVG(svg: string, time: number) {
+    const newSVG = this.parseSVG(svg);
+    const diff = this.diffSVG(this.parsedSVG, newSVG);
+    const transformed = diff.transformed.map(({ from, to }) => ({
+      from: this.cloneNodeExact(from),
+      current: from,
+      to,
+    }));
+
+    for (const node of diff.inserted) this.add(node);
+
+    const autoWidth = this.customWidth() == null;
+    const autoHeight = this.customHeight() == null;
+
+    const beginning = 0.2;
+    const ending = 0.8;
+    const overlap = 0.15;
+
+    yield* tween(
+      time,
+      (value) => {
+        const remapped = clampRemap(beginning, ending, 0, 1, value);
+        for (const node of transformed) {
+          node.current.position(
+            easeInOutSineVector2(
+              remapped,
+              node.from.position(),
+              node.to.position()
+            )
+          );
+          node.current.scale(
+            easeInOutSineVector2(remapped, node.from.scale(), node.to.scale())
+          );
+          node.current.rotation(
+            easeInOutSine(remapped, node.from.rotation(), node.to.rotation())
+          );
+
+          if (node.current instanceof Rect) {
+            node.current.size(
+              easeInOutSineVector2(
+                remapped,
+                (node.from as Layout).size(),
+                (node.to as Layout).size()
+              )
+            );
+          }
+        }
+
+        if (autoWidth)
+          this.customWidth(
+            easeInOutSine(value, diff.fromSize.x, diff.toSize.x)
+          );
+
+        if (autoHeight)
+          this.customHeight(
+            easeInOutSine(value, diff.fromSize.y, diff.toSize.y)
+          );
+
+        const deletedOpacity = clampRemap(0, beginning + overlap, 1, 0, value);
+        for (const node of diff.deleted) node.opacity(deletedOpacity);
+
+        const insertedOpacity = clampRemap(ending - overlap, 1, 0, 1, value);
+        for (const node of diff.inserted) node.opacity(insertedOpacity);
+      },
+      () => {
+        this.removeChildren();
+        newSVG.nodes.forEach((child) => this.add(child));
+        this.parsedSVG = newSVG;
+        this.svg(svg);
+        if (autoWidth) this.customWidth(null);
+        if (autoHeight) this.customHeight(null);
+      }
+    );
   }
 }

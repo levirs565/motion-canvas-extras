@@ -1,5 +1,10 @@
 import { NodeProps } from "@motion-canvas/2d/lib/components";
-import { BBox, SerializedVector2, Vector2 } from "@motion-canvas/core/lib/types";
+import { easeInOutSine } from "@motion-canvas/core/lib/tweening";
+import {
+  BBox,
+  SerializedVector2,
+  Vector2,
+} from "@motion-canvas/core/lib/types";
 import bound from "svg-path-bounds";
 
 export function getPathBBox(data: string) {
@@ -36,4 +41,8 @@ export function decomposeMatrixTransformation(matrix: DOMMatrix): NodeProps {
     rotation,
     scale,
   };
+}
+
+export function easeInOutSineVector2(value: number, from: Vector2, to: Vector2) {
+  return Vector2.lerp(from, to, easeInOutSine(value, 0, 1));
 }

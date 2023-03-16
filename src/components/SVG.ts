@@ -83,15 +83,22 @@ export class SVG extends Layout {
     const svgRoot = container.querySelector("svg");
     const { x, y, width, height } = svgRoot.viewBox.baseVal;
     const viewBox = new BBox(x, y, width, height);
+    const size = new Vector2(
+      svgRoot.width.baseVal.value,
+      svgRoot.height.baseVal.value
+    );
+    const scale = size.div(viewBox.size);
     const center = viewBox.center;
 
-    const rootTransform = new DOMMatrix().translate(-center.x, -center.y);
+    const rootTransform = new DOMMatrix()
+      .scale(scale.x, scale.y)
+      .translate(-center.x, -center.y);
 
     const nodes = Array.from(
       this.extractGroupShape(svgRoot, svgRoot, rootTransform, {})
     );
     return {
-      size: viewBox.size,
+      size,
       nodes,
     };
   }

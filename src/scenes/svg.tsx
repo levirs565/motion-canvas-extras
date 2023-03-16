@@ -11,7 +11,7 @@ export default makeScene2D(function* (view) {
   view.add(
     <SVG
       svg={svgStr}
-      scale={0.2}
+      scale={8}
       y={0} // height and width can calculate based on each other
       ref={svg}
     />

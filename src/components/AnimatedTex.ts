@@ -8,6 +8,7 @@ import { SignalValue, SimpleSignal } from "@motion-canvas/core/lib/signals";
 import { OptionList } from "mathjax-full/js/util/Options";
 import { computed, initial, signal } from "@motion-canvas/2d/lib/decorators";
 import { SVGProps, SVG as SVGComponent } from "./SVG";
+import { useLogger } from "@motion-canvas/core/lib/utils";
 
 const Adaptor = liteAdaptor();
 RegisterHTMLHandler(Adaptor);
@@ -25,7 +26,6 @@ export interface AnimatedTexProps extends SVGProps {
 }
 
 export class AnimatedTex extends SVGComponent {
-  private static fontSizePer = 0.00125;
   private static svgContentsPool: Record<string, string> = {};
 
   @initial({})
@@ -38,12 +38,12 @@ export class AnimatedTex extends SVGComponent {
   public constructor(props: AnimatedTexProps) {
     super(props);
     this.svg(this.latexSVG);
-    this.scale(this.scaleFactor);
+    this.scale(this.scaleFactor)
   }
 
   @computed()
   scaleFactor() {
-    return this.fontSize() * AnimatedTex.fontSizePer;
+    return this.fontSize() / 2;
   }
 
   @computed()

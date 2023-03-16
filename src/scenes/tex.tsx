@@ -33,7 +33,11 @@ export default makeScene2D(function* (view) {
     1
   );
   yield* tex().tweenTex(
-    "{\\color{white} x = 3 + \\sin \\left( \\frac{\\pi}{2} \\right) + 1}",
+    "{\\color{white} x = 3 + \\sin \\left( \\dfrac{\\pi}{2} \\right) + 1}",
+    1
+  );
+  yield* tex().tweenTex(
+    "{\\color{white} x = 3 + \\sin \\left( \\dfrac{\\pi + 3}{2} \\right) + 1}",
     1
   );
   yield* tex().tweenTex(

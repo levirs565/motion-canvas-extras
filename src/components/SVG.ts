@@ -23,12 +23,7 @@ import {
 } from "@motion-canvas/core/lib/types";
 import { useLogger } from "@motion-canvas/core/lib/utils";
 import diffSequence from "diff-sequences";
-import {
-  decomposeMatrixTransformation,
-  easeInOutSineVector2,
-  firstNotNull,
-  getPathBBox,
-} from "../utils";
+import { easeInOutSineVector2, firstNotNull } from "../utils";
 import { Path } from "./Path";
 
 interface ParsedSVG {
@@ -148,6 +143,27 @@ export class SVG extends Shape {
     };
   }
 
+  private applyTransformToShape(shape: Shape, transform: DOMMatrix) {
+    const position = {
+      x: transform.m41,
+      y: transform.m42,
+    };
+    const rotation = (Math.atan2(transform.m12, transform.m11) * 180) / Math.PI;
+    const scale = {
+      x: Vector2.magnitude(transform.m11, transform.m12),
+      y: Vector2.magnitude(transform.m21, transform.m22),
+    };
+    var determinant =
+      transform.m11 * transform.m22 - transform.m12 * transform.m21;
+    if (determinant < 0) {
+      if (transform.m11 < transform.m22) scale.x = -scale.x;
+      else scale.y = -scale.y;
+    }
+    shape.position(position);
+    shape.rotation(rotation);
+    shape.scale(scale);
+  }
+
   private *extractGroupShape(
     element: SVGElement,
     svgRoot: Element,
@@ -197,26 +213,30 @@ export class SVG extends Shape {
         useLogger().warn("blank path data at " + child.id);
         return;
       }
-      const center = getPathBBox(data).center;
-      yield new Path({
+      const path = new Path({
         data,
         ...style,
-        ...decomposeMatrixTransformation(
-          transformMatrix.translate(center.x, center.y)
-        ),
       });
+      const center = path.getPathBBox().center;
+      this.applyTransformToShape(
+        path,
+        transformMatrix.translate(center.x, center.y)
+      );
+      yield path;
     } else if (child.tagName == "rect") {
       const width = parseFloat(child.getAttribute("width"));
       const height = parseFloat(child.getAttribute("height"));
       const center = new BBox(0, 0, width, height).center;
-      yield new Rect({
+      const rect = new Rect({
         width,
         height,
         ...style,
-        ...decomposeMatrixTransformation(
-          transformMatrix.translate(center.x, center.y)
-        ),
       });
+      this.applyTransformToShape(
+        rect,
+        transformMatrix.translate(center.x, center.y)
+      );
+      yield rect;
     }
   }
 

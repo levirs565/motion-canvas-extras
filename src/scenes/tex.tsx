@@ -1,4 +1,4 @@
-import { Layout, Rect, Txt, Node } from "@motion-canvas/2d/lib/components";
+import { Layout, Txt, Node } from "@motion-canvas/2d/lib/components";
 import { makeScene2D } from "@motion-canvas/2d/lib/scenes";
 import { waitFor } from "@motion-canvas/core/lib/flow";
 import { createSignal } from "@motion-canvas/core/lib/signals";
@@ -9,16 +9,15 @@ export default makeScene2D(function* (view) {
   const fontSize = createSignal<number>(48);
   const tex = createRef<AnimatedTex>();
   view.add(
-    <Rect>
-      <Txt text="This is normal text" fontSize={fontSize} y={-100} />
+    <Layout layout direction={"column"} gap={50}>
+      <Txt text="This is normal text" fontSize={fontSize} />
       <Txt text="x" fontSize={fontSize} />
       <AnimatedTex
         ref={tex}
         tex="{\color{white} x = \sin \left( \frac{\pi}{2} \right)}"
         fontSize={fontSize}
-        y={200}
       />
-    </Rect>
+    </Layout>
   );
   yield* waitFor(2);
   yield* tex().opacity(0, 1);

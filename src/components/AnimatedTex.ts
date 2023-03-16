@@ -38,7 +38,7 @@ export class AnimatedTex extends SVGComponent {
   public constructor(props: AnimatedTexProps) {
     super(props);
     this.svg(this.latexSVG);
-    this.scale(this.scaleFactor)
+    this.wrapper.scale(this.scaleFactor);
   }
 
   @computed()

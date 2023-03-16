@@ -51,15 +51,18 @@ export interface SVGProps extends LayoutProps {
 export class SVG extends Layout {
   @signal()
   public declare readonly svg: SimpleSignal<string, this>;
+  public wrapper: Node;
 
   public constructor(props: SVGProps) {
     super(props);
-    this.spawner(this.parsedNodes);
+    this.wrapper = new Node({});
+    this.wrapper.children(this.parsedNodes);
+    this.add(this.wrapper);
   }
 
   protected override desiredSize(): SerializedVector2<DesiredLength> {
     const custom = super.desiredSize();
-    const { x, y } = this.parsed().size;
+    const { x, y } = this.parsed().size.mul(this.wrapper.scale());
     return {
       x: custom.x ?? x,
       y: custom.y ?? y,
@@ -304,7 +307,7 @@ export class SVG extends Layout {
       to,
     }));
 
-    for (const node of diff.inserted) this.add(node);
+    for (const node of diff.inserted) this.wrapper.add(node);
 
     const autoWidth = this.customWidth() == null;
     const autoHeight = this.customHeight() == null;
@@ -343,14 +346,15 @@ export class SVG extends Layout {
           }
         }
 
+        const scale = this.wrapper.scale();
         if (autoWidth)
           this.customWidth(
-            easeInOutSine(value, diff.fromSize.x, diff.toSize.x)
+            easeInOutSine(value, diff.fromSize.x, diff.toSize.x) * scale.x
           );
 
         if (autoHeight)
           this.customHeight(
-            easeInOutSine(value, diff.fromSize.y, diff.toSize.y)
+            easeInOutSine(value, diff.fromSize.y, diff.toSize.y) * scale.y
           );
 
         const deletedOpacity = clampRemap(0, beginning + overlap, 1, 0, value);
@@ -360,7 +364,7 @@ export class SVG extends Layout {
         for (const node of diff.inserted) node.opacity(insertedOpacity);
       },
       () => {
-        this.spawner(this.parsedNodes);
+        this.wrapper.children(this.parsedNodes);
         this.svg(svg);
         if (autoWidth) this.customWidth(null);
         if (autoHeight) this.customHeight(null);

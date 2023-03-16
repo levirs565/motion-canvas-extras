@@ -14,8 +14,9 @@ export default makeScene2D(function* (view) {
       <Txt text="x" fontSize={fontSize} />
       <AnimatedTex
         ref={tex}
-        tex="{\color{white} x = \sin \left( \frac{\pi}{2} \right)}"
+        tex="{\color{white} x} = \sin \left( \frac{\pi}{2} \right)"
         fontSize={fontSize}
+        fill="black"
       />
     </Layout>
   );

@@ -1,12 +1,15 @@
 import {
   Layout,
-  LayoutProps,
   Node,
   Rect,
+  Shape,
   ShapeProps,
 } from "@motion-canvas/2d/lib/components";
 import { computed, signal } from "@motion-canvas/2d/lib/decorators";
-import { DesiredLength } from "@motion-canvas/2d/lib/partials";
+import {
+  DesiredLength,
+  PossibleCanvasStyle,
+} from "@motion-canvas/2d/lib/partials";
 import { SignalValue, SimpleSignal } from "@motion-canvas/core/lib/signals";
 import {
   clampRemap,
@@ -44,11 +47,11 @@ interface SVGDiff {
   }>;
 }
 
-export interface SVGProps extends LayoutProps {
+export interface SVGProps extends ShapeProps {
   svg?: SignalValue<string>;
 }
 
-export class SVG extends Layout {
+export class SVG extends Shape {
   @signal()
   public declare readonly svg: SimpleSignal<string, this>;
   public wrapper: Node;
@@ -119,14 +122,22 @@ export class SVG extends Layout {
     return transformMatrix;
   }
 
+  private parseColor(color: string | null): SignalValue<PossibleCanvasStyle> {
+    if (color == "currentColor") return this.fill;
+    return color;
+  }
+
   private getElementStyle(
     element: SVGGraphicsElement,
     inheritedStyle: ShapeProps
   ): ShapeProps {
     return {
-      fill: firstNotNull(element.getAttribute("fill"), inheritedStyle.fill),
+      fill: firstNotNull(
+        this.parseColor(element.getAttribute("fill")),
+        inheritedStyle.fill
+      ),
       stroke: firstNotNull(
-        element.getAttribute("stroke"),
+        this.parseColor(element.getAttribute("stroke")),
         inheritedStyle.stroke
       ),
       lineWidth: firstNotNull(
